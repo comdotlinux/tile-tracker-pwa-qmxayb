@@ -1,47 +1,57 @@
+
 {
   "expo": {
-    "name": "Natively",
-    "slug": "Natively",
+    "name": "Tile Tracker",
+    "slug": "tile-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/natively-dark.png",
+    "icon": "./assets/images/final_quest_240x240.png",
+    "scheme": "tiletracker",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/natively-dark.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.natively.tiletracker",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "NSLocationWhenInUseUsageDescription": "Tile Tracker uses your location to add context to your activity logs. Location data is stored only on your device with 5km precision for privacy.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Tile Tracker uses your location to add context to your activity logs. Location data is stored only on your device with 5km precision for privacy."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/natively-dark.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/images/final_quest_240x240.png",
+        "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.natively.tiletracker",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
-      "favicon": "./assets/images/final_quest_240x240.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/final_quest_240x240.png"
     },
     "plugins": [
-      "expo-font",
       "expo-router",
-      "expo-web-browser"
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Tile Tracker uses your location to add context to your activity logs. Location data is stored only on your device with 5km precision for privacy."
+        }
+      ]
     ],
-    "scheme": "natively",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      }
     }
   }
 }

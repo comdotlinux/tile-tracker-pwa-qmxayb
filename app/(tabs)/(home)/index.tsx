@@ -1,63 +1,109 @@
-import React from "react";
-import { Stack, Link } from "expo-router";
-import { FlatList, Pressable, StyleSheet, View, Text, Alert, Platform } from "react-native";
-import { IconSymbol } from "@/components/IconSymbol";
-import { GlassView } from "expo-glass-effect";
-import { useTheme } from "@react-navigation/native";
 
-const ICON_COLOR = "#007AFF";
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Pressable,
+  Platform,
+  Alert,
+} from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { useTheme } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { IconSymbol } from '@/components/IconSymbol';
+import TileCard from '@/components/TileCard';
+import AddTileModal from '@/components/AddTileModal';
+import TileDetailsModal from '@/components/TileDetailsModal';
+import WelcomeModal from '@/components/WelcomeModal';
+import { useTiles } from '@/hooks/useTiles';
+import { TileWithLogs } from '@/types/tile';
+
+const WELCOME_SHOWN_KEY = '@tile_tracker_welcome_shown';
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const modalDemos = [
-    {
-      title: "Standard Modal",
-      description: "Full screen modal presentation",
-      route: "/modal",
-      color: "#007AFF",
-    },
-    {
-      title: "Form Sheet",
-      description: "Bottom sheet with detents and grabber",
-      route: "/formsheet",
-      color: "#34C759",
-    },
-    {
-      title: "Transparent Modal",
-      description: "Overlay without obscuring background",
-      route: "/transparent-modal",
-      color: "#FF9500",
-    }
-  ];
+  const router = useRouter();
+  const {
+    tiles,
+    loading,
+    addTile,
+    deleteTile,
+    logEvent,
+    getLogsForTile,
+    getTilesWithLogs,
+    deleteLog,
+  } = useTiles();
 
-  const renderModalDemo = ({ item }: { item: (typeof modalDemos)[0] }) => (
-    <GlassView style={[
-      styles.demoCard,
-      Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
-    ]} glassEffectStyle="regular">
-      <View style={[styles.demoIcon, { backgroundColor: item.color }]}>
-        <IconSymbol name="square.grid.3x3" color="white" size={24} />
-      </View>
-      <View style={styles.demoContent}>
-        <Text style={[styles.demoTitle, { color: theme.colors.text }]}>{item.title}</Text>
-        <Text style={[styles.demoDescription, { color: theme.dark ? '#98989D' : '#666' }]}>{item.description}</Text>
-      </View>
-      <Link href={item.route as any} asChild>
-        <Pressable>
-          <GlassView style={[
-            styles.tryButton,
-            Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)' }
-          ]} glassEffectStyle="clear">
-            <Text style={[styles.tryButtonText, { color: theme.colors.primary }]}>Try It</Text>
-          </GlassView>
-        </Pressable>
-      </Link>
-    </GlassView>
-  );
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [welcomeModalVisible, setWelcomeModalVisible] = useState(false);
+  const [selectedTile, setSelectedTile] = useState<TileWithLogs | null>(null);
+
+  useEffect(() => {
+    checkFirstLaunch();
+  }, []);
+
+  const checkFirstLaunch = async () => {
+    try {
+      const hasShownWelcome = await AsyncStorage.getItem(WELCOME_SHOWN_KEY);
+      if (!hasShownWelcome) {
+        setWelcomeModalVisible(true);
+      }
+    } catch (error) {
+      console.error('Error checking first launch:', error);
+    }
+  };
+
+  const handleWelcomeClose = async () => {
+    try {
+      await AsyncStorage.setItem(WELCOME_SHOWN_KEY, 'true');
+      setWelcomeModalVisible(false);
+    } catch (error) {
+      console.error('Error saving welcome shown:', error);
+      setWelcomeModalVisible(false);
+    }
+  };
+
+  const tilesWithLogs = getTilesWithLogs();
+
+  const handleTilePress = async (tileId: string) => {
+    await logEvent(tileId);
+    console.log('Event logged for tile:', tileId);
+  };
+
+  const handleTileLongPress = (tile: TileWithLogs) => {
+    setSelectedTile(tile);
+    setDetailsModalVisible(true);
+  };
+
+  const handleAddTile = async (text: string, emoji: string, color: string) => {
+    await addTile(text, emoji, color);
+  };
+
+  const handleDeleteTile = async () => {
+    if (selectedTile) {
+      await deleteTile(selectedTile.id);
+      setSelectedTile(null);
+    }
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    await deleteLog(logId);
+    // Refresh selected tile data
+    if (selectedTile) {
+      const updatedTiles = getTilesWithLogs();
+      const updatedTile = updatedTiles.find(t => t.id === selectedTile.id);
+      if (updatedTile) {
+        setSelectedTile(updatedTile);
+      }
+    }
+  };
 
   const renderHeaderRight = () => (
     <Pressable
-      onPress={() => Alert.alert("Not Implemented", "This feature is not implemented yet")}
+      onPress={() => setAddModalVisible(true)}
       style={styles.headerButtonContainer}
     >
       <IconSymbol name="plus" color={theme.colors.primary} />
@@ -66,14 +112,43 @@ export default function HomeScreen() {
 
   const renderHeaderLeft = () => (
     <Pressable
-      onPress={() => Alert.alert("Not Implemented", "This feature is not implemented yet")}
+      onPress={() => router.push('/profile')}
       style={styles.headerButtonContainer}
     >
-      <IconSymbol
-        name="gear"
-        color={theme.colors.primary}
-      />
+      <IconSymbol name="gear" color={theme.colors.primary} />
     </Pressable>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyEmoji}>🎯</Text>
+      <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+        Create Your First Tile
+      </Text>
+      <Text style={[styles.emptyText, { color: theme.dark ? '#999' : '#666' }]}>
+        Tiles help you track activities with a single tap. Create one to get started!
+      </Text>
+      <Pressable
+        onPress={() => setAddModalVisible(true)}
+        style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
+      >
+        <IconSymbol name="plus" size={20} color="#FFFFFF" />
+        <Text style={styles.emptyButtonText}>Create Tile</Text>
+      </Pressable>
+    </View>
+  );
+
+  const renderTile = ({ item }: { item: TileWithLogs }) => (
+    <TileCard
+      id={item.id}
+      text={item.text}
+      emoji={item.emoji}
+      color={item.color}
+      totalLogs={item.totalLogs}
+      lastLoggedAt={item.lastLoggedAt}
+      onPress={() => handleTilePress(item.id)}
+      onLongPress={() => handleTileLongPress(item)}
+    />
   );
 
   return (
@@ -81,25 +156,50 @@ export default function HomeScreen() {
       {Platform.OS === 'ios' && (
         <Stack.Screen
           options={{
-            title: "Building the app...",
+            title: 'Tile Tracker',
             headerRight: renderHeaderRight,
             headerLeft: renderHeaderLeft,
           }}
         />
       )}
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <FlatList
-          data={modalDemos}
-          renderItem={renderModalDemo}
-          keyExtractor={(item) => item.route}
-          contentContainerStyle={[
-            styles.listContainer,
-            Platform.OS !== 'ios' && styles.listContainerWithTabBar
-          ]}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-        />
+        {tilesWithLogs.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <FlatList
+            data={tilesWithLogs}
+            renderItem={renderTile}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={styles.row}
+            contentContainerStyle={[
+              styles.listContainer,
+              Platform.OS !== 'ios' && styles.listContainerWithTabBar,
+            ]}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
+
+      <WelcomeModal visible={welcomeModalVisible} onClose={handleWelcomeClose} />
+
+      <AddTileModal
+        visible={addModalVisible}
+        onClose={() => setAddModalVisible(false)}
+        onAdd={handleAddTile}
+      />
+
+      <TileDetailsModal
+        visible={detailsModalVisible}
+        onClose={() => {
+          setDetailsModalVisible(false);
+          setSelectedTile(null);
+        }}
+        tile={selectedTile}
+        logs={selectedTile ? getLogsForTile(selectedTile.id) : []}
+        onDeleteTile={handleDeleteTile}
+        onDeleteLog={handleDeleteLog}
+      />
     </>
   );
 }
@@ -107,55 +207,52 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // backgroundColor handled dynamically
   },
   listContainer: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    padding: 16,
   },
   listContainerWithTabBar: {
-    paddingBottom: 100, // Extra padding for floating tab bar
+    paddingBottom: 100,
   },
-  demoCard: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  demoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  demoContent: {
-    flex: 1,
-  },
-  demoTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-    // color handled dynamically
-  },
-  demoDescription: {
-    fontSize: 14,
-    lineHeight: 18,
-    // color handled dynamically
+  row: {
+    justifyContent: 'space-between',
   },
   headerButtonContainer: {
     padding: 6,
   },
-  tryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
   },
-  tryButtonText: {
-    fontSize: 14,
+  emptyEmoji: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  emptyButtonText: {
+    fontSize: 16,
     fontWeight: '600',
-    // color handled dynamically
+    color: '#FFFFFF',
   },
 });
