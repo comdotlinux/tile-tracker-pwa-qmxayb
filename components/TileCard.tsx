@@ -1,5 +1,5 @@
 
-import React, { useRef } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -56,14 +56,14 @@ export default function TileCard({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
-    // Success animation
+    // Success animation - scale up and back to 1
     scale.value = withSequence(
       withSpring(1.1, { damping: 10 }),
-      withSpring(1, { damping: 15 })
+      withSpring(1, { damping: 15 }) // Returns to original size
     );
     opacity.value = withSequence(
       withSpring(0.7, { damping: 10 }),
-      withSpring(1, { damping: 15 })
+      withSpring(1, { damping: 15 }) // Returns to original opacity
     );
 
     // Call the actual press handler

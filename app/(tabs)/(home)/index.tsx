@@ -23,23 +23,12 @@ import { TileWithLogs } from '@/types/tile';
 const WELCOME_SHOWN_KEY = '@tile_tracker_welcome_shown';
 
 export default function HomeScreen() {
-  const theme = useTheme();
-  const router = useRouter();
-  const {
-    tiles,
-    loading,
-    addTile,
-    deleteTile,
-    logEvent,
-    getLogsForTile,
-    getTilesWithLogs,
-    deleteLog,
-  } = useTiles();
-
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
-  const [welcomeModalVisible, setWelcomeModalVisible] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [selectedTile, setSelectedTile] = useState<TileWithLogs | null>(null);
+  const { tiles, loading, addTile, deleteTile, logEvent, getTilesWithLogs, deleteLog } = useTiles();
+  const router = useRouter();
+  const theme = useTheme();
 
   useEffect(() => {
     checkFirstLaunch();
@@ -47,9 +36,9 @@ export default function HomeScreen() {
 
   const checkFirstLaunch = async () => {
     try {
-      const hasShownWelcome = await AsyncStorage.getItem(WELCOME_SHOWN_KEY);
-      if (!hasShownWelcome) {
-        setWelcomeModalVisible(true);
+      const hasShown = await AsyncStorage.getItem(WELCOME_SHOWN_KEY);
+      if (!hasShown) {
+        setShowWelcomeModal(true);
       }
     } catch (error) {
       console.error('Error checking first launch:', error);
@@ -59,23 +48,18 @@ export default function HomeScreen() {
   const handleWelcomeClose = async () => {
     try {
       await AsyncStorage.setItem(WELCOME_SHOWN_KEY, 'true');
-      setWelcomeModalVisible(false);
+      setShowWelcomeModal(false);
     } catch (error) {
-      console.error('Error saving welcome shown:', error);
-      setWelcomeModalVisible(false);
+      console.error('Error saving welcome shown flag:', error);
     }
   };
 
-  const tilesWithLogs = getTilesWithLogs();
-
   const handleTilePress = async (tileId: string) => {
     await logEvent(tileId);
-    console.log('Event logged for tile:', tileId);
   };
 
   const handleTileLongPress = (tile: TileWithLogs) => {
     setSelectedTile(tile);
-    setDetailsModalVisible(true);
   };
 
   const handleAddTile = async (text: string, emoji: string, color: string) => {
@@ -84,52 +68,55 @@ export default function HomeScreen() {
 
   const handleDeleteTile = async () => {
     if (selectedTile) {
-      await deleteTile(selectedTile.id);
-      setSelectedTile(null);
+      Alert.alert(
+        'Delete Tile',
+        `Are you sure you want to delete "${selectedTile.text}"? This will also delete all logs for this tile.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteTile(selectedTile.id);
+              setSelectedTile(null);
+            },
+          },
+        ]
+      );
     }
   };
 
   const handleDeleteLog = async (logId: string) => {
     await deleteLog(logId);
-    // Refresh selected tile data
-    if (selectedTile) {
-      const updatedTiles = getTilesWithLogs();
-      const updatedTile = updatedTiles.find(t => t.id === selectedTile.id);
-      if (updatedTile) {
-        setSelectedTile(updatedTile);
-      }
-    }
   };
 
   const renderHeaderRight = () => (
     <Pressable
-      onPress={() => setAddModalVisible(true)}
-      style={styles.headerButtonContainer}
+      onPress={() => setShowAddModal(true)}
+      style={({ pressed }) => [
+        styles.headerButton,
+        pressed && styles.headerButtonPressed,
+      ]}
     >
-      <IconSymbol name="plus" color={theme.colors.primary} />
+      <IconSymbol name="plus" size={24} color={theme.colors.primary} />
     </Pressable>
   );
 
   const renderHeaderLeft = () => (
-    <Pressable
-      onPress={() => router.push('/profile')}
-      style={styles.headerButtonContainer}
-    >
-      <IconSymbol name="gear" color={theme.colors.primary} />
-    </Pressable>
+    <View style={styles.headerLeft}>
+      <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Tile Tracker</Text>
+    </View>
   );
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyEmoji}>🎯</Text>
-      <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-        Create Your First Tile
-      </Text>
-      <Text style={[styles.emptyText, { color: theme.dark ? '#999' : '#666' }]}>
-        Tiles help you track activities with a single tap. Create one to get started!
+      <Text style={styles.emptyEmoji}>📝</Text>
+      <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Tiles Yet</Text>
+      <Text style={[styles.emptyDescription, { color: theme.colors.text, opacity: 0.6 }]}>
+        Create your first tile to start tracking activities
       </Text>
       <Pressable
-        onPress={() => setAddModalVisible(true)}
+        onPress={() => setShowAddModal(true)}
         style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
       >
         <IconSymbol name="plus" size={20} color="#FFFFFF" />
@@ -151,19 +138,28 @@ export default function HomeScreen() {
     />
   );
 
+  const tilesWithLogs = getTilesWithLogs();
+
   return (
     <>
-      {Platform.OS === 'ios' && (
-        <Stack.Screen
-          options={{
-            title: 'Tile Tracker',
-            headerRight: renderHeaderRight,
-            headerLeft: renderHeaderLeft,
-          }}
-        />
-      )}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerTitle: '',
+          headerLeft: renderHeaderLeft,
+          headerRight: renderHeaderRight,
+          headerStyle: {
+            backgroundColor: theme.colors.background,
+          },
+          headerShadowVisible: false,
+        }}
+      />
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {tilesWithLogs.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading...</Text>
+          </View>
+        ) : tilesWithLogs.length === 0 ? (
           renderEmptyState()
         ) : (
           <FlatList
@@ -172,34 +168,42 @@ export default function HomeScreen() {
             keyExtractor={(item) => item.id}
             numColumns={2}
             columnWrapperStyle={styles.row}
-            contentContainerStyle={[
-              styles.listContainer,
-              Platform.OS !== 'ios' && styles.listContainerWithTabBar,
-            ]}
+            contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
           />
         )}
+
+        {/* Floating Add Button - Always visible when tiles exist */}
+        {tilesWithLogs.length > 0 && (
+          <Pressable
+            onPress={() => setShowAddModal(true)}
+            style={[
+              styles.floatingButton,
+              { backgroundColor: theme.colors.primary },
+              Platform.OS !== 'ios' && styles.floatingButtonAndroid,
+            ]}
+          >
+            <IconSymbol name="plus" size={28} color="#FFFFFF" />
+          </Pressable>
+        )}
+
+        <AddTileModal
+          visible={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddTile}
+        />
+
+        <TileDetailsModal
+          visible={selectedTile !== null}
+          onClose={() => setSelectedTile(null)}
+          tile={selectedTile}
+          logs={selectedTile ? selectedTile.logs : []}
+          onDeleteTile={handleDeleteTile}
+          onDeleteLog={handleDeleteLog}
+        />
+
+        <WelcomeModal visible={showWelcomeModal} onClose={handleWelcomeClose} />
       </View>
-
-      <WelcomeModal visible={welcomeModalVisible} onClose={handleWelcomeClose} />
-
-      <AddTileModal
-        visible={addModalVisible}
-        onClose={() => setAddModalVisible(false)}
-        onAdd={handleAddTile}
-      />
-
-      <TileDetailsModal
-        visible={detailsModalVisible}
-        onClose={() => {
-          setDetailsModalVisible(false);
-          setSelectedTile(null);
-        }}
-        tile={selectedTile}
-        logs={selectedTile ? getLogsForTile(selectedTile.id) : []}
-        onDeleteTile={handleDeleteTile}
-        onDeleteLog={handleDeleteLog}
-      />
     </>
   );
 }
@@ -208,17 +212,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  listContainer: {
-    padding: 16,
+  headerLeft: {
+    marginLeft: Platform.OS === 'ios' ? 0 : 16,
   },
-  listContainerWithTabBar: {
-    paddingBottom: 100,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  headerButton: {
+    padding: 8,
+    marginRight: Platform.OS === 'ios' ? 0 : 8,
+    borderRadius: 8,
+  },
+  headerButtonPressed: {
+    opacity: 0.6,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 100, // Extra space for floating button
   },
   row: {
     justifyContent: 'space-between',
-  },
-  headerButtonContainer: {
-    padding: 6,
   },
   emptyState: {
     flex: 1,
@@ -228,31 +250,43 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: {
     fontSize: 80,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 12,
-    textAlign: 'center',
+    marginBottom: 8,
   },
-  emptyText: {
+  emptyDescription: {
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 32,
-    lineHeight: 24,
   },
   emptyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
+    gap: 8,
   },
   emptyButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+  },
+  floatingButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+  },
+  floatingButtonAndroid: {
+    elevation: 8,
   },
 });

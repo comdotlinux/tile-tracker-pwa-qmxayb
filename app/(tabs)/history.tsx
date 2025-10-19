@@ -8,11 +8,13 @@ import {
   Pressable,
   Platform,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useTiles } from '@/hooks/useTiles';
 import { EventLog } from '@/types/tile';
+import { decodeGeohash } from '@/utils/geohash';
 
 interface LogWithTile extends EventLog {
   tileName: string;
@@ -21,11 +23,11 @@ interface LogWithTile extends EventLog {
 }
 
 export default function HistoryScreen() {
+  const { tiles, logs } = useTiles();
   const theme = useTheme();
-  const { tiles, logs, getTilesWithLogs } = useTiles();
-  const [filterTileId, setFilterTileId] = useState<string | null>(null);
+  const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
 
-  const logsWithTiles: LogWithTile[] = useMemo(() => {
+  const logsWithTileInfo = useMemo(() => {
     return logs
       .map((log) => {
         const tile = tiles.find((t) => t.id === log.tileId);
@@ -35,20 +37,22 @@ export default function HistoryScreen() {
           tileName: tile.text,
           tileEmoji: tile.emoji,
           tileColor: tile.color,
-        };
+        } as LogWithTile;
       })
       .filter((log): log is LogWithTile => log !== null)
       .sort((a, b) => b.timestamp - a.timestamp);
   }, [logs, tiles]);
 
-  const filteredLogs = filterTileId
-    ? logsWithTiles.filter((log) => log.tileId === filterTileId)
-    : logsWithTiles;
+  const filteredLogs = useMemo(() => {
+    if (!selectedTileId) return logsWithTileInfo;
+    return logsWithTileInfo.filter((log) => log.tileId === selectedTileId);
+  }, [logsWithTileInfo, selectedTileId]);
 
-  const groupedByDate = useMemo(() => {
+  const groupedLogs = useMemo(() => {
     const groups: { [key: string]: LogWithTile[] } = {};
     filteredLogs.forEach((log) => {
       const date = new Date(log.timestamp).toLocaleDateString('en-US', {
+        weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -62,11 +66,25 @@ export default function HistoryScreen() {
   }, [filteredLogs]);
 
   const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
+    return new Date(timestamp).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+    });
+  };
+
+  const handleOpenInMaps = (geohash: string) => {
+    const { latitude, longitude } = decodeGeohash(geohash);
+    const url = Platform.select({
+      ios: `maps:0,0?q=${latitude},${longitude}`,
+      android: `geo:0,0?q=${latitude},${longitude}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+    });
+    
+    Linking.openURL(url).catch(err => {
+      console.error('Error opening maps:', err);
+      // Fallback to Google Maps web
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
     });
   };
 
@@ -75,29 +93,58 @@ export default function HistoryScreen() {
       style={[
         styles.logItem,
         {
-          backgroundColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+          backgroundColor: theme.dark
+            ? 'rgba(255,255,255,0.05)'
+            : 'rgba(0,0,0,0.03)',
         },
       ]}
     >
-      <View style={[styles.logIcon, { backgroundColor: item.tileColor }]}>
-        <Text style={styles.logEmoji}>{item.tileEmoji}</Text>
-      </View>
-      <View style={styles.logContent}>
-        <Text style={[styles.logTitle, { color: theme.colors.text }]}>{item.tileName}</Text>
-        <View style={styles.logMeta}>
-          <Text style={[styles.logTime, { color: theme.dark ? '#999' : '#666' }]}>
+      <View style={styles.logHeader}>
+        <View style={[styles.tileIndicator, { backgroundColor: item.tileColor }]}>
+          <Text style={styles.tileEmoji}>{item.tileEmoji}</Text>
+        </View>
+        <View style={styles.logInfo}>
+          <Text style={[styles.tileName, { color: theme.colors.text }]}>
+            {item.tileName}
+          </Text>
+          <Text style={[styles.logTime, { color: theme.colors.text, opacity: 0.6 }]}>
             {formatTime(item.timestamp)}
           </Text>
-          {item.location && (
-            <View style={styles.locationBadge}>
-              <IconSymbol name="location.fill" size={12} color={theme.dark ? '#999' : '#666'} />
-              <Text style={[styles.locationText, { color: theme.dark ? '#999' : '#666' }]}>
-                {item.location.geohash}
-              </Text>
-            </View>
-          )}
         </View>
       </View>
+      {item.location && (
+        <Pressable
+          onPress={() => handleOpenInMaps(item.location!.geohash)}
+          style={[
+            styles.locationContainer,
+            {
+              backgroundColor: theme.dark
+                ? 'rgba(255,255,255,0.08)'
+                : 'rgba(0,0,0,0.05)',
+            },
+          ]}
+        >
+          <IconSymbol
+            name="location.fill"
+            size={14}
+            color={theme.colors.primary}
+          />
+          <View style={styles.locationText}>
+            <Text style={[styles.locationLabel, { color: theme.colors.text }]}>
+              {item.location.geohash}
+            </Text>
+            <Text style={[styles.locationHint, { color: theme.colors.primary }]}>
+              Tap to open in Maps
+            </Text>
+          </View>
+          <IconSymbol
+            name="chevron.right"
+            size={14}
+            color={theme.colors.text}
+            style={{ opacity: 0.4 }}
+          />
+        </Pressable>
+      )}
     </View>
   );
 
@@ -114,98 +161,85 @@ export default function HistoryScreen() {
     <View style={styles.emptyState}>
       <Text style={styles.emptyEmoji}>📊</Text>
       <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No History Yet</Text>
-      <Text style={[styles.emptyText, { color: theme.dark ? '#999' : '#666' }]}>
-        Start logging activities to see your history here
+      <Text style={[styles.emptyDescription, { color: theme.colors.text, opacity: 0.6 }]}>
+        Start logging activities by tapping tiles on the home screen
       </Text>
     </View>
   );
 
   const renderFilterChips = () => (
-    <View style={styles.filterContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterContainer}
+    >
+      <Pressable
+        onPress={() => setSelectedTileId(null)}
+        style={[
+          styles.filterChip,
+          {
+            backgroundColor: !selectedTileId
+              ? theme.colors.primary
+              : theme.dark
+              ? 'rgba(255,255,255,0.1)'
+              : 'rgba(0,0,0,0.05)',
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            {
+              color: !selectedTileId ? '#FFFFFF' : theme.colors.text,
+            },
+          ]}
+        >
+          All
+        </Text>
+      </Pressable>
+      {tiles.map((tile) => (
         <Pressable
-          onPress={() => setFilterTileId(null)}
+          key={tile.id}
+          onPress={() => setSelectedTileId(tile.id)}
           style={[
             styles.filterChip,
             {
               backgroundColor:
-                filterTileId === null
-                  ? theme.colors.primary
+                selectedTileId === tile.id
+                  ? tile.color
                   : theme.dark
                   ? 'rgba(255,255,255,0.1)'
                   : 'rgba(0,0,0,0.05)',
             },
           ]}
         >
+          <Text style={styles.filterChipEmoji}>{tile.emoji}</Text>
           <Text
             style={[
               styles.filterChipText,
               {
-                color: filterTileId === null ? '#FFFFFF' : theme.colors.text,
+                color: selectedTileId === tile.id ? '#FFFFFF' : theme.colors.text,
               },
             ]}
           >
-            All
+            {tile.text}
           </Text>
         </Pressable>
-        {tiles.map((tile) => (
-          <Pressable
-            key={tile.id}
-            onPress={() => setFilterTileId(tile.id)}
-            style={[
-              styles.filterChip,
-              {
-                backgroundColor:
-                  filterTileId === tile.id
-                    ? tile.color
-                    : theme.dark
-                    ? 'rgba(255,255,255,0.1)'
-                    : 'rgba(0,0,0,0.05)',
-              },
-            ]}
-          >
-            <Text style={styles.filterChipEmoji}>{tile.emoji}</Text>
-            <Text
-              style={[
-                styles.filterChipText,
-                {
-                  color: filterTileId === tile.id ? '#FFFFFF' : theme.colors.text,
-                },
-              ]}
-            >
-              {tile.text}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
+      ))}
+    </ScrollView>
   );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>History</Text>
-        <Text style={[styles.subtitle, { color: theme.dark ? '#999' : '#666' }]}>
-          {filteredLogs.length} {filteredLogs.length === 1 ? 'log' : 'logs'}
-        </Text>
-      </View>
-
-      {/* Filter Chips */}
       {tiles.length > 0 && renderFilterChips()}
-
-      {/* Logs List */}
-      {groupedByDate.length === 0 ? (
+      {filteredLogs.length === 0 ? (
         renderEmptyState()
       ) : (
         <FlatList
-          data={groupedByDate}
+          data={groupedLogs}
           renderItem={renderDateSection}
           keyExtractor={(item) => item.date}
-          contentContainerStyle={[
-            styles.listContainer,
-            Platform.OS !== 'ios' && styles.listContainerWithTabBar,
-          ]}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -217,21 +251,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    padding: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-  },
   filterContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
   },
   filterChip: {
     flexDirection: 'row',
@@ -239,7 +262,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 8,
     gap: 6,
   },
   filterChipEmoji: {
@@ -249,12 +271,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  listContainerWithTabBar: {
-    paddingBottom: 100,
+  listContent: {
+    padding: 16,
   },
   dateSection: {
     marginBottom: 24,
@@ -265,46 +283,56 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   logItem: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  logHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
     marginBottom: 8,
-    gap: 12,
   },
-  logIcon: {
+  tileIndicator: {
     width: 48,
     height: 48,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
-  logEmoji: {
+  tileEmoji: {
     fontSize: 24,
   },
-  logContent: {
+  logInfo: {
     flex: 1,
   },
-  logTitle: {
+  tileName: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
-  },
-  logMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    marginBottom: 2,
   },
   logTime: {
     fontSize: 14,
   },
-  locationBadge: {
+  locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    padding: 10,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 4,
   },
   locationText: {
-    fontSize: 12,
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  locationHint: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   emptyState: {
     flex: 1,
@@ -314,17 +342,15 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: {
     fontSize: 80,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 12,
-    textAlign: 'center',
+    marginBottom: 8,
   },
-  emptyText: {
+  emptyDescription: {
     fontSize: 16,
     textAlign: 'center',
-    lineHeight: 24,
   },
 });

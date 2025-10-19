@@ -9,10 +9,11 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Linking,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
-import { EventLog } from '@/types/tile';
 import { IconSymbol } from './IconSymbol';
+import { EventLog } from '@/types/tile';
 import { decodeGeohash } from '@/utils/geohash';
 
 interface TileDetailsModalProps {
@@ -43,40 +44,46 @@ export default function TileDetailsModal({
   if (!tile) return null;
 
   const handleDeleteTile = () => {
+    onDeleteTile();
+  };
+
+  const handleDeleteLog = (logId: string) => {
     Alert.alert(
-      'Delete Tile',
-      `Are you sure you want to delete "${tile.text}"? This will also delete all ${tile.totalLogs} logs.`,
+      'Delete Log',
+      'Are you sure you want to delete this log entry?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            onDeleteTile();
-            onClose();
-          },
+          onPress: () => onDeleteLog(logId),
         },
       ]
     );
   };
 
-  const handleDeleteLog = (logId: string) => {
-    Alert.alert('Delete Log', 'Are you sure you want to delete this log entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => onDeleteLog(logId),
-      },
-    ]);
+  const handleOpenInMaps = (geohash: string) => {
+    const { latitude, longitude } = decodeGeohash(geohash);
+    const url = Platform.select({
+      ios: `maps:0,0?q=${latitude},${longitude}`,
+      android: `geo:0,0?q=${latitude},${longitude}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+    });
+    
+    Linking.openURL(url).catch(err => {
+      console.error('Error opening maps:', err);
+      // Fallback to Google Maps web
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
+    });
   };
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
     });
   };
 
@@ -90,24 +97,23 @@ export default function TileDetailsModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
         <View style={[styles.modalContainer, { backgroundColor: theme.colors.card }]}>
           {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <View style={[styles.tileIcon, { backgroundColor: tile.color }]}>
-                <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-              </View>
-              <View>
-                <Text style={[styles.title, { color: theme.colors.text }]}>{tile.text}</Text>
-                <Text style={[styles.subtitle, { color: theme.dark ? '#999' : '#666' }]}>
-                  {tile.totalLogs} total logs
-                </Text>
-              </View>
+          <View style={[styles.header, { backgroundColor: tile.color }]}>
+            <View style={styles.headerContent}>
+              <Text style={styles.headerEmoji}>{tile.emoji}</Text>
+              <Text style={styles.headerTitle}>{tile.text}</Text>
+              <Text style={styles.headerSubtitle}>{tile.totalLogs} total logs</Text>
             </View>
             <Pressable onPress={onClose} style={styles.closeButton}>
-              <IconSymbol name="xmark" size={24} color={theme.colors.text} />
+              <IconSymbol name="xmark" size={24} color="#FFFFFF" />
             </Pressable>
           </View>
 
@@ -115,12 +121,8 @@ export default function TileDetailsModal({
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {logs.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyEmoji}>📭</Text>
                 <Text style={[styles.emptyText, { color: theme.colors.text }]}>
-                  No logs yet
-                </Text>
-                <Text style={[styles.emptySubtext, { color: theme.dark ? '#999' : '#666' }]}>
-                  Tap the tile to create your first log
+                  No logs yet. Tap the tile to create your first log!
                 </Text>
               </View>
             ) : (
@@ -136,35 +138,61 @@ export default function TileDetailsModal({
                     },
                   ]}
                 >
-                  <View style={styles.logContent}>
-                    <View style={styles.logHeader}>
+                  <View style={styles.logHeader}>
+                    <View style={styles.logTime}>
+                      <IconSymbol
+                        name="clock"
+                        size={16}
+                        color={theme.colors.text}
+                        style={{ opacity: 0.6 }}
+                      />
                       <Text style={[styles.logDate, { color: theme.colors.text }]}>
                         {formatDate(log.timestamp)}
                       </Text>
-                      <Text style={[styles.logTime, { color: theme.dark ? '#999' : '#666' }]}>
+                      <Text style={[styles.logTimeText, { color: theme.colors.text }]}>
                         {formatTime(log.timestamp)}
                       </Text>
                     </View>
-                    {log.location && (
-                      <View style={styles.locationContainer}>
-                        <IconSymbol
-                          name="location.fill"
-                          size={14}
-                          color={theme.dark ? '#999' : '#666'}
-                        />
-                        <Text style={[styles.locationText, { color: theme.dark ? '#999' : '#666' }]}>
-                          {log.location.geohash} ({log.location.latitude.toFixed(4)},{' '}
-                          {log.location.longitude.toFixed(4)})
+                    <Pressable
+                      onPress={() => handleDeleteLog(log.id)}
+                      style={styles.deleteButton}
+                    >
+                      <IconSymbol name="trash" size={18} color="#FF3B30" />
+                    </Pressable>
+                  </View>
+                  {log.location && (
+                    <Pressable
+                      onPress={() => handleOpenInMaps(log.location!.geohash)}
+                      style={[
+                        styles.locationContainer,
+                        {
+                          backgroundColor: theme.dark
+                            ? 'rgba(255,255,255,0.08)'
+                            : 'rgba(0,0,0,0.05)',
+                        },
+                      ]}
+                    >
+                      <IconSymbol
+                        name="location.fill"
+                        size={16}
+                        color={theme.colors.primary}
+                      />
+                      <View style={styles.locationText}>
+                        <Text style={[styles.locationLabel, { color: theme.colors.text }]}>
+                          Location: {log.location.geohash}
+                        </Text>
+                        <Text style={[styles.locationHint, { color: theme.colors.primary }]}>
+                          Tap to open in Maps
                         </Text>
                       </View>
-                    )}
-                  </View>
-                  <Pressable
-                    onPress={() => handleDeleteLog(log.id)}
-                    style={styles.deleteLogButton}
-                  >
-                    <IconSymbol name="trash" size={18} color="#FF3B30" />
-                  </Pressable>
+                      <IconSymbol
+                        name="chevron.right"
+                        size={16}
+                        color={theme.colors.text}
+                        style={{ opacity: 0.4 }}
+                      />
+                    </Pressable>
+                  )}
                 </View>
               ))
             )}
@@ -174,10 +202,10 @@ export default function TileDetailsModal({
           <View style={styles.footer}>
             <Pressable
               onPress={handleDeleteTile}
-              style={[styles.deleteButton, { backgroundColor: '#FF3B30' }]}
+              style={[styles.deleteButton, styles.deleteTileButton]}
             >
-              <IconSymbol name="trash" size={20} color="#FFFFFF" />
-              <Text style={styles.deleteButtonText}>Delete Tile</Text>
+              <IconSymbol name="trash" size={20} color="#FF3B30" />
+              <Text style={styles.deleteTileText}>Delete Tile</Text>
             </Pressable>
           </View>
         </View>
@@ -199,36 +227,35 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 34 : 20,
   },
   header: {
+    padding: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
+    alignItems: 'flex-start',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  headerContent: {
     flex: 1,
   },
-  tileIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
   },
-  tileEmoji: {
-    fontSize: 32,
-  },
-  title: {
-    fontSize: 20,
+  headerTitle: {
+    fontSize: 24,
     fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  subtitle: {
+  headerSubtitle: {
     fontSize: 14,
-    marginTop: 2,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   closeButton: {
     padding: 4,
@@ -238,72 +265,78 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   emptyState: {
+    padding: 40,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
+    opacity: 0.6,
   },
   logItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
     borderRadius: 12,
-    marginBottom: 8,
-  },
-  logContent: {
-    flex: 1,
+    padding: 16,
+    marginBottom: 12,
   },
   logHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  logDate: {
-    fontSize: 16,
-    fontWeight: '600',
+    marginBottom: 8,
   },
   logTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  logDate: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  logTimeText: {
     fontSize: 14,
+    opacity: 0.7,
+  },
+  deleteButton: {
+    padding: 4,
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    padding: 12,
+    borderRadius: 8,
+    gap: 10,
   },
   locationText: {
-    fontSize: 12,
+    flex: 1,
   },
-  deleteLogButton: {
-    padding: 8,
+  locationLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  locationHint: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   footer: {
     padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128, 128, 128, 0.2)',
   },
-  deleteButton: {
+  deleteTileButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
     gap: 8,
   },
-  deleteButtonText: {
+  deleteTileText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#FF3B30',
   },
 });

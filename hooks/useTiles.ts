@@ -9,12 +9,10 @@ export function useTiles() {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [logs, setLogs] = useState<EventLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [locationPermission, setLocationPermission] = useState<boolean>(false);
 
-  // Load data on mount
+  // Load data on mount - NO location permission request here
   useEffect(() => {
     loadData();
-    requestLocationPermission();
   }, []);
 
   const loadData = async () => {
@@ -30,16 +28,6 @@ export function useTiles() {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const requestLocationPermission = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status === 'granted');
-      console.log('Location permission:', status);
-    } catch (error) {
-      console.error('Error requesting location permission:', error);
     }
   };
 
@@ -73,20 +61,30 @@ export function useTiles() {
   const logEvent = useCallback(async (tileId: string) => {
     let location = undefined;
 
-    if (locationPermission) {
-      try {
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        location = {
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          geohash: encodeGeohash(loc.coords.latitude, loc.coords.longitude, 4),
-        };
-        console.log('Location captured:', location);
-      } catch (error) {
-        console.error('Error getting location:', error);
+    // Request location permission ONLY when logging an event
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('Location permission status:', status);
+      
+      if (status === 'granted') {
+        try {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          location = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            geohash: encodeGeohash(loc.coords.latitude, loc.coords.longitude, 4),
+          };
+          console.log('Location captured:', location);
+        } catch (error) {
+          console.error('Error getting location:', error);
+        }
+      } else {
+        console.log('Location permission not granted, continuing without location');
       }
+    } catch (error) {
+      console.error('Error requesting location permission:', error);
     }
 
     const newLog: EventLog = {
@@ -101,7 +99,7 @@ export function useTiles() {
     await saveEventLogs(updatedLogs);
     console.log('Event logged:', newLog);
     return newLog;
-  }, [logs, locationPermission]);
+  }, [logs]);
 
   const getLogsForTile = useCallback((tileId: string): EventLog[] => {
     return logs.filter(log => log.tileId === tileId).sort((a, b) => b.timestamp - a.timestamp);
@@ -130,7 +128,6 @@ export function useTiles() {
     tiles,
     logs,
     loading,
-    locationPermission,
     addTile,
     deleteTile,
     logEvent,

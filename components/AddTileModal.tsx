@@ -11,9 +11,9 @@ import {
   Platform,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
-import { GlassView } from 'expo-glass-effect';
-import { backgroundColors, emojies } from '@/constants/Colors';
+import { backgroundColors } from '@/constants/Colors';
 import { IconSymbol } from './IconSymbol';
+import EmojiPickerModal from './EmojiPickerModal';
 
 interface AddTileModalProps {
   visible: boolean;
@@ -26,6 +26,7 @@ export default function AddTileModal({ visible, onClose, onAdd }: AddTileModalPr
   const [text, setText] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📝');
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const handleAdd = () => {
     if (text.trim()) {
@@ -45,130 +46,142 @@ export default function AddTileModal({ visible, onClose, onAdd }: AddTileModalPr
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={handleClose}
-    >
-      <View style={styles.overlay}>
-        <View style={[styles.modalContainer, { backgroundColor: theme.colors.card }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Create New Tile</Text>
-            <Pressable onPress={handleClose} style={styles.closeButton}>
-              <IconSymbol name="xmark" size={24} color={theme.colors.text} />
-            </Pressable>
-          </View>
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleClose}
+      >
+        <View style={styles.overlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.colors.card }]}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={[styles.title, { color: theme.colors.text }]}>Create New Tile</Text>
+              <Pressable onPress={handleClose} style={styles.closeButton}>
+                <IconSymbol name="xmark" size={24} color={theme.colors.text} />
+              </Pressable>
+            </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {/* Text Input */}
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Tile Name</Text>
-              <TextInput
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+              {/* Text Input */}
+              <View style={styles.section}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Tile Name</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                      color: theme.colors.text,
+                      borderColor: theme.dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                    },
+                  ]}
+                  placeholder="e.g., Drank Water"
+                  placeholderTextColor={theme.dark ? '#999' : '#666'}
+                  value={text}
+                  onChangeText={setText}
+                  maxLength={30}
+                  autoFocus
+                />
+              </View>
+
+              {/* Emoji Picker Button */}
+              <View style={styles.section}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Choose Icon</Text>
+                <Pressable
+                  onPress={() => setShowEmojiPicker(true)}
+                  style={[
+                    styles.emojiPickerButton,
+                    {
+                      backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                      borderColor: theme.dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                    },
+                  ]}
+                >
+                  <Text style={styles.selectedEmojiLarge}>{selectedEmoji}</Text>
+                  <View style={styles.emojiPickerButtonText}>
+                    <Text style={[styles.emojiPickerButtonLabel, { color: theme.colors.text }]}>
+                      Tap to change icon
+                    </Text>
+                    <Text style={[styles.emojiPickerButtonHint, { color: theme.colors.text, opacity: 0.6 }]}>
+                      Search from hundreds of emojis
+                    </Text>
+                  </View>
+                  <IconSymbol name="chevron.right" size={20} color={theme.colors.text} style={{ opacity: 0.5 }} />
+                </Pressable>
+              </View>
+
+              {/* Color Picker */}
+              <View style={styles.section}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Choose Color</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.colorGrid}>
+                    {backgroundColors.slice(0, 60).map((color) => (
+                      <Pressable
+                        key={color}
+                        onPress={() => setSelectedColor(color)}
+                        style={[
+                          styles.colorButton,
+                          { backgroundColor: color },
+                          selectedColor === color && styles.colorButtonSelected,
+                        ]}
+                      >
+                        {selectedColor === color && (
+                          <IconSymbol name="checkmark" size={16} color="#FFFFFF" />
+                        )}
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Preview */}
+              <View style={styles.section}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Preview</Text>
+                <View style={[styles.preview, { backgroundColor: selectedColor }]}>
+                  <Text style={styles.previewEmoji}>{selectedEmoji}</Text>
+                  <Text style={styles.previewText}>{text || 'Tile Name'}</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Pressable
+                onPress={handleClose}
                 style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                    color: theme.colors.text,
-                    borderColor: theme.dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
-                  },
+                  styles.button,
+                  styles.cancelButton,
+                  { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' },
                 ]}
-                placeholder="e.g., Drank Water"
-                placeholderTextColor={theme.dark ? '#999' : '#666'}
-                value={text}
-                onChangeText={setText}
-                maxLength={30}
-                autoFocus
-              />
+              >
+                <Text style={[styles.buttonText, { color: theme.colors.text }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleAdd}
+                disabled={!text.trim()}
+                style={[
+                  styles.button,
+                  styles.addButton,
+                  { backgroundColor: theme.colors.primary },
+                  !text.trim() && styles.buttonDisabled,
+                ]}
+              >
+                <Text style={styles.addButtonText}>Create Tile</Text>
+              </Pressable>
             </View>
-
-            {/* Emoji Picker */}
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Choose Icon</Text>
-              <View style={styles.emojiGrid}>
-                {emojies.slice(0, 60).map((emoji) => (
-                  <Pressable
-                    key={emoji}
-                    onPress={() => setSelectedEmoji(emoji)}
-                    style={[
-                      styles.emojiButton,
-                      selectedEmoji === emoji && styles.emojiButtonSelected,
-                      {
-                        backgroundColor: selectedEmoji === emoji
-                          ? theme.colors.primary
-                          : theme.dark
-                          ? 'rgba(255,255,255,0.05)'
-                          : 'rgba(0,0,0,0.03)',
-                      },
-                    ]}
-                  >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Color Picker */}
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Choose Color</Text>
-              <View style={styles.colorGrid}>
-                {backgroundColors.slice(0, 40).map((color) => (
-                  <Pressable
-                    key={color}
-                    onPress={() => setSelectedColor(color)}
-                    style={[
-                      styles.colorButton,
-                      { backgroundColor: color },
-                      selectedColor === color && styles.colorButtonSelected,
-                    ]}
-                  >
-                    {selectedColor === color && (
-                      <IconSymbol name="checkmark" size={16} color="#FFFFFF" />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Preview */}
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Preview</Text>
-              <View style={[styles.preview, { backgroundColor: selectedColor }]}>
-                <Text style={styles.previewEmoji}>{selectedEmoji}</Text>
-                <Text style={styles.previewText}>{text || 'Tile Name'}</Text>
-              </View>
-            </View>
-          </ScrollView>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Pressable
-              onPress={handleClose}
-              style={[
-                styles.button,
-                styles.cancelButton,
-                { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' },
-              ]}
-            >
-              <Text style={[styles.buttonText, { color: theme.colors.text }]}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleAdd}
-              disabled={!text.trim()}
-              style={[
-                styles.button,
-                styles.addButton,
-                { backgroundColor: theme.colors.primary },
-                !text.trim() && styles.buttonDisabled,
-              ]}
-            >
-              <Text style={styles.addButtonText}>Create Tile</Text>
-            </Pressable>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+
+      {/* Emoji Picker Modal */}
+      <EmojiPickerModal
+        visible={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onSelect={setSelectedEmoji}
+        selectedEmoji={selectedEmoji}
+      />
+    </>
   );
 }
 
@@ -217,24 +230,27 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
   },
-  emojiGrid: {
+  emojiPickerButton: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  emojiButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
   },
-  emojiButtonSelected: {
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  selectedEmojiLarge: {
+    fontSize: 40,
   },
-  emojiText: {
-    fontSize: 24,
+  emojiPickerButtonText: {
+    flex: 1,
+  },
+  emojiPickerButtonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  emojiPickerButtonHint: {
+    fontSize: 13,
   },
   colorGrid: {
     flexDirection: 'row',
