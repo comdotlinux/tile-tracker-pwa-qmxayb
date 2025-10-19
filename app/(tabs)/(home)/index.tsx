@@ -23,6 +23,8 @@ import { TileWithLogs } from '@/types/tile';
 const WELCOME_SHOWN_KEY = '@tile_tracker_welcome_shown';
 
 export default function HomeScreen() {
+  console.log('HomeScreen rendering...');
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [selectedTile, setSelectedTile] = useState<TileWithLogs | null>(null);
@@ -30,13 +32,18 @@ export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
 
+  console.log('Tiles count:', tiles.length);
+  console.log('Loading:', loading);
+
   useEffect(() => {
+    console.log('Running first launch check...');
     checkFirstLaunch();
   }, []);
 
   const checkFirstLaunch = async () => {
     try {
       const hasShown = await AsyncStorage.getItem(WELCOME_SHOWN_KEY);
+      console.log('Welcome shown before:', hasShown);
       if (!hasShown) {
         setShowWelcomeModal(true);
       }
@@ -49,21 +56,37 @@ export default function HomeScreen() {
     try {
       await AsyncStorage.setItem(WELCOME_SHOWN_KEY, 'true');
       setShowWelcomeModal(false);
+      console.log('Welcome modal closed');
     } catch (error) {
       console.error('Error saving welcome shown flag:', error);
     }
   };
 
   const handleTilePress = async (tileId: string) => {
-    await logEvent(tileId);
+    console.log('Tile pressed:', tileId);
+    try {
+      await logEvent(tileId);
+      console.log('Event logged successfully');
+    } catch (error) {
+      console.error('Error logging event:', error);
+      Alert.alert('Error', 'Failed to log event. Please try again.');
+    }
   };
 
   const handleTileLongPress = (tile: TileWithLogs) => {
+    console.log('Tile long pressed:', tile.id);
     setSelectedTile(tile);
   };
 
   const handleAddTile = async (text: string, emoji: string, color: string) => {
-    await addTile(text, emoji, color);
+    console.log('Adding tile:', { text, emoji, color });
+    try {
+      await addTile(text, emoji, color);
+      console.log('Tile added successfully');
+    } catch (error) {
+      console.error('Error adding tile:', error);
+      Alert.alert('Error', 'Failed to add tile. Please try again.');
+    }
   };
 
   const handleDeleteTile = async () => {
@@ -77,8 +100,14 @@ export default function HomeScreen() {
             text: 'Delete',
             style: 'destructive',
             onPress: async () => {
-              await deleteTile(selectedTile.id);
-              setSelectedTile(null);
+              try {
+                await deleteTile(selectedTile.id);
+                setSelectedTile(null);
+                console.log('Tile deleted successfully');
+              } catch (error) {
+                console.error('Error deleting tile:', error);
+                Alert.alert('Error', 'Failed to delete tile. Please try again.');
+              }
             },
           },
         ]
@@ -87,12 +116,22 @@ export default function HomeScreen() {
   };
 
   const handleDeleteLog = async (logId: string) => {
-    await deleteLog(logId);
+    console.log('Deleting log:', logId);
+    try {
+      await deleteLog(logId);
+      console.log('Log deleted successfully');
+    } catch (error) {
+      console.error('Error deleting log:', error);
+      Alert.alert('Error', 'Failed to delete log. Please try again.');
+    }
   };
 
   const renderHeaderRight = () => (
     <Pressable
-      onPress={() => setShowAddModal(true)}
+      onPress={() => {
+        console.log('Add button pressed');
+        setShowAddModal(true);
+      }}
       style={({ pressed }) => [
         styles.headerButton,
         pressed && styles.headerButtonPressed,
@@ -116,7 +155,10 @@ export default function HomeScreen() {
         Create your first tile to start tracking activities
       </Text>
       <Pressable
-        onPress={() => setShowAddModal(true)}
+        onPress={() => {
+          console.log('Create tile button pressed from empty state');
+          setShowAddModal(true);
+        }}
         style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
       >
         <IconSymbol name="plus" size={20} color="#FFFFFF" />
@@ -139,6 +181,7 @@ export default function HomeScreen() {
   );
 
   const tilesWithLogs = getTilesWithLogs();
+  console.log('Tiles with logs:', tilesWithLogs.length);
 
   return (
     <>
@@ -176,7 +219,10 @@ export default function HomeScreen() {
         {/* Floating Add Button - Always visible when tiles exist */}
         {tilesWithLogs.length > 0 && (
           <Pressable
-            onPress={() => setShowAddModal(true)}
+            onPress={() => {
+              console.log('Floating add button pressed');
+              setShowAddModal(true);
+            }}
             style={[
               styles.floatingButton,
               { backgroundColor: theme.colors.primary },
@@ -189,13 +235,19 @@ export default function HomeScreen() {
 
         <AddTileModal
           visible={showAddModal}
-          onClose={() => setShowAddModal(false)}
+          onClose={() => {
+            console.log('Add modal closed');
+            setShowAddModal(false);
+          }}
           onAdd={handleAddTile}
         />
 
         <TileDetailsModal
           visible={selectedTile !== null}
-          onClose={() => setSelectedTile(null)}
+          onClose={() => {
+            console.log('Details modal closed');
+            setSelectedTile(null);
+          }}
           tile={selectedTile}
           logs={selectedTile ? selectedTile.logs : []}
           onDeleteTile={handleDeleteTile}
